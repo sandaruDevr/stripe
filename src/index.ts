@@ -10,10 +10,11 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173', // Allow Vite dev server by default
-  credentials: true, // Allow credentials
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'], // Added OPTIONS explicitly
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'], // Added Accept header
+  exposedHeaders: ['Content-Type', 'Authorization'], // Expose necessary headers
 }));
 
 // Parse JSON for all routes except Stripe webhooks
@@ -24,6 +25,9 @@ app.use((req, res, next) => {
     express.json()(req, res, next);
   }
 });
+
+// Enable pre-flight requests for all routes
+app.options('*', cors());
 
 // Routes
 app.use('/stripe', verifyAuth, stripeRoutes);
