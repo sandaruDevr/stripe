@@ -1,7 +1,8 @@
 import express from 'express';
-import { stripe, STRIPE_PRO_PLAN_PRICE_ID } from '../config/stripe';
-import { db } from '../config/firebase';
-import { CreateCheckoutSessionBody, CreatePortalSessionBody } from '../types';
+import { stripe, STRIPE_PRO_PLAN_PRICE_ID } from '../config/stripe.js';
+import { db } from '../config/firebase.js';
+import type { CreateCheckoutSessionBody, CreatePortalSessionBody } from '../types/index.js';
+import type { Stripe as StripeType } from 'stripe';
 
 const router = express.Router();
 
@@ -84,7 +85,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     switch (event.type) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as StripeType.Subscription;
         const customerId = subscription.customer as string;
         
         // Get user by customer ID
@@ -115,7 +116,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       }
 
       case 'customer.subscription.deleted': {
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as StripeType.Subscription;
         const customerId = subscription.customer as string;
         
         const usersSnapshot = await db.collection('users')
