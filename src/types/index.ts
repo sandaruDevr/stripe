@@ -1,3 +1,5 @@
+import type { Stripe } from 'stripe';
+
 export interface UserSubscription {
   customerId: string;
   subscriptionId: string;
@@ -18,3 +20,5 @@ export interface CreatePortalSessionBody {
   customerId: string;
   returnUrl: string;
 }
+
+export type StripeSubscription = Stripe.Subscription;
