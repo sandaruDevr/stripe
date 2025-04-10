@@ -11,46 +11,69 @@ router.post('/create-checkout-session', async (req, res) => {
   try {
     const { priceId, userId, returnUrl }: CreateCheckoutSessionBody = req.body;
 
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    if (!returnUrl) {
+      return res.status(400).json({ error: 'Return URL is required' });
+    }
+
     // Get or create customer
     const userDoc = await db.collection('users').doc(userId).get();
-    const userData = userDoc.data();
     
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const userData = userDoc.data();
     let customerId = userData?.stripeCustomerId;
     
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        metadata: {
-          userId,
-        },
-      });
-      customerId = customer.id;
-      await db.collection('users').doc(userId).update({
-        stripeCustomerId: customerId,
-      });
+    try {
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          metadata: {
+            userId,
+          },
+        });
+        customerId = customer.id;
+        await db.collection('users').doc(userId).update({
+          stripeCustomerId: customerId,
+        });
+      }
+    } catch (error) {
+      console.error('Error creating/updating customer:', error);
+      return res.status(500).json({ error: 'Failed to create or update customer' });
     }
 
     // Create checkout session
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
+    try {
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        mode: 'subscription',
+        subscription_data: {
+          trial_period_days: 3,
         },
-      ],
-      mode: 'subscription',
-      subscription_data: {
-        trial_period_days: 3,
-      },
-      success_url: `${returnUrl}?success=true`,
-      cancel_url: `${returnUrl}?canceled=true`,
-    });
+        success_url: `${returnUrl}?success=true`,
+        cancel_url: `${returnUrl}?canceled=true`,
+      });
 
-    res.json({ sessionId: session.id });
+      res.setHeader('Content-Type', 'application/json');
+      return res.json({ sessionId: session.id });
+    } catch (error) {
+      console.error('Error creating checkout session:', error);
+      return res.status(500).json({ error: 'Failed to create checkout session' });
+    }
   } catch (error) {
-    console.error('Error creating checkout session:', error);
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    console.error('Unexpected error in create-checkout-session:', error);
+    return res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -59,15 +82,24 @@ router.post('/create-portal-session', async (req, res) => {
   try {
     const { customerId, returnUrl }: CreatePortalSessionBody = req.body;
 
+    if (!customerId) {
+      return res.status(400).json({ error: 'Customer ID is required' });
+    }
+
+    if (!returnUrl) {
+      return res.status(400).json({ error: 'Return URL is required' });
+    }
+
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
       return_url: returnUrl,
     });
 
-    res.json({ url: session.url });
+    res.setHeader('Content-Type', 'application/json');
+    return res.json({ url: session.url });
   } catch (error) {
     console.error('Error creating portal session:', error);
-    res.status(500).json({ error: 'Failed to create portal session' });
+    return res.status(500).json({ error: 'Failed to create portal session' });
   }
 });
 
@@ -76,7 +108,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   const sig = req.headers['stripe-signature'];
 
   if (!process.env.STRIPE_WEBHOOK_SECRET || !sig) {
-    return res.status(400).send('Webhook secret is required');
+    return res.status(400).json({ error: 'Webhook secret is required' });
   }
 
   try {
@@ -95,7 +127,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           .get();
 
         if (usersSnapshot.empty) {
-          throw new Error('No user found for customer');
+          return res.status(404).json({ error: 'No user found for customer' });
         }
 
         const userId = usersSnapshot.docs[0].id;
@@ -135,10 +167,11 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       }
     }
 
-    res.json({ received: true });
+    res.setHeader('Content-Type', 'application/json');
+    return res.json({ received: true });
   } catch (error) {
     console.error('Error handling webhook:', error);
-    res.status(400).send('Webhook signature verification failed');
+    return res.status(400).json({ error: 'Webhook signature verification failed' });
   }
 });
 
