@@ -1,8 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import stripeRoutes from './routes/stripe';
-import { verifyAuth } from './middleware/auth';
+import stripeRoutes from './routes/stripe.js';
+import { verifyAuth } from './middleware/auth.js';
 
 dotenv.config();
 
